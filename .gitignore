@@ -1,17 +1,31 @@
 # Dependencies
 node_modules/
-package-lock.json
-yarn.lock
+*/node_modules/
 
 # Environment variables
 .env
 .env.local
 .env.production
+.env.development
+backend/.env
+frontend/.env
 
 # Build outputs
 dist/
 build/
+*/dist/
+*/build/
+
+# Logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
 
 # IDE
 .vscode/
@@ -19,17 +33,12 @@ build/
 *.swp
 *.swo
 
-# OS
-.DS_Store
-Thumbs.db
+# Database files
+*.sql
+cafe_ordering.sql
+cafe_ordering_clean.sql
+import-database.js
 
-# QR Codes
-qr-codes/
-*.png
-*.jpg
-*.jpeg
-
-# Database
-*.db
-*.sqlite
-
+# Temporary files
+*.tmp
+*.temp
