@@ -20,20 +20,29 @@ const allowedOrigins = [
   'http://localhost:5176',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:5176',
-  'http://192.168.156.86:5173' // Allow access from network IP
+  'http://192.168.156.86:5173', // Allow access from network IP
+  'https://deser-villa.vercel.app', // Vercel deployment
+  'https://desertvilla.in', // Custom domain
+  'https://www.desertvilla.in' // Custom domain with www
 ];
 
 app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
+    
+    // Check if origin is in allowed list
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
-      // Allow any localhost port and local network IPs for development
-      if (origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes('192.168.')) {
+      // Allow any localhost, 127.0.0.1, local network IPs, and vercel.app domains
+      if (origin.includes('localhost') || 
+          origin.includes('127.0.0.1') || 
+          origin.includes('192.168.') ||
+          origin.includes('.vercel.app')) {
         callback(null, true);
       } else {
+        console.log('CORS blocked origin:', origin);
         callback(new Error('Not allowed by CORS'));
       }
     }
