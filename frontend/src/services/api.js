@@ -1,8 +1,7 @@
 import axios from 'axios';
 
-// Use proxy in development, direct URL in production
-const API_BASE_URL = import.meta.env.VITE_API_URL || 
-  (import.meta.env.DEV ? '/api' : 'http://localhost:5000/api');
+// Use environment variable or fallback to production URL
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://deservilla.onrender.com/api';
 
 console.log('API Base URL:', API_BASE_URL);
 console.log('Environment:', import.meta.env.MODE);
