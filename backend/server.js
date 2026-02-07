@@ -21,7 +21,10 @@ const allowedOrigins = [
   'http://127.0.0.1:5173',
   'http://127.0.0.1:5176',
   'http://192.168.156.86:5173', // Allow access from network IP
+<<<<<<< HEAD
   'http://192.168.203.86:5173', // Current network IP
+=======
+>>>>>>> 2ede478d0f2164cfe6e8efb00d58acc28796f05d
   'https://deser-villa.vercel.app', // Vercel deployment
   'https://desertvilla.in', // Custom domain
   'https://www.desertvilla.in' // Custom domain with www
