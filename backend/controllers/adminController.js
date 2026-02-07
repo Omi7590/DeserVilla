@@ -628,3 +628,55 @@ export const getPayments = async (req, res, next) => {
     next(error);
   }
 };
+
+// ==================== CHANGE PASSWORD ====================
+
+export const changePassword = async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const adminId = req.admin.adminId;
+    
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current password and new password are required' });
+    }
+    
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters long' });
+    }
+    
+    // Get current admin user
+    const result = await pool.query(
+      'SELECT id, username, password_hash FROM admin_users WHERE id = $1',
+      [adminId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Admin user not found' });
+    }
+    
+    const admin = result.rows[0];
+    
+    // Verify current password
+    const isValidPassword = await bcrypt.compare(currentPassword, admin.password_hash);
+    
+    if (!isValidPassword) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+    
+    // Hash new password
+    const newPasswordHash = await bcrypt.hash(newPassword, 10);
+    
+    // Update password
+    await pool.query(
+      'UPDATE admin_users SET password_hash = $1 WHERE id = $2',
+      [newPasswordHash, adminId]
+    );
+    
+    res.json({
+      success: true,
+      message: 'Password changed successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};

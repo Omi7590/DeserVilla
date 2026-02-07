@@ -12,7 +12,8 @@ import {
   Bell,
   User,
   Settings,
-  UserCircle
+  UserCircle,
+  Key
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -226,6 +227,16 @@ const AdminLayout = () => {
                     >
                       <LayoutDashboard className="w-5 h-5 text-gray-600" />
                       <span className="text-sm font-medium text-gray-700">Dashboard</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        navigate('/admin/change-password');
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 transition-colors text-left"
+                    >
+                      <Key className="w-5 h-5 text-gray-600" />
+                      <span className="text-sm font-medium text-gray-700">Change Password</span>
                     </button>
                     <button
                       onClick={() => {

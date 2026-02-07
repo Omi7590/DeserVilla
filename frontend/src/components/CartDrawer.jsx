@@ -113,8 +113,8 @@ const CartDrawer = ({ isOpen, onClose, onCheckout }) => {
                 <UtensilsCrossed className="w-4 h-4 inline mr-1" />
                 Select Table Number
               </label>
-              <div className="grid grid-cols-7 gap-2">
-                {[1, 2, 3, 4, 5, 6, 7].map((table) => (
+              <div className="grid grid-cols-6 gap-2">
+                {[1, 2, 3, 4, 5, 6].map((table) => (
                   <button
                     key={table}
                     onClick={() => selectTable(table)}

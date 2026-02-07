@@ -13,7 +13,7 @@ const __dirname = dirname(__filename);
 // Configuration
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 const OUTPUT_DIR = join(__dirname, '../qr-codes');
-const NUM_TABLES = 7;
+const NUM_TABLES = 6;
 
 // Create output directory if it doesn't exist
 if (!existsSync(OUTPUT_DIR)) {

@@ -1,6 +1,8 @@
 import { Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+import { useEffect } from 'react';
 import { CartProvider } from './context/CartContext';
+import { startKeepAlive, stopKeepAlive } from './utils/keepAlive';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminLayout from './components/AdminLayout';
 import MenuPage from './pages/MenuPage';
@@ -11,6 +13,7 @@ import AdminOrders from './pages/admin/AdminOrders';
 import AdminProducts from './pages/admin/AdminProducts';
 import AdminPayments from './pages/admin/AdminPayments';
 import AdminHallBookings from './pages/admin/AdminHallBookings';
+import AdminChangePassword from './pages/admin/AdminChangePassword';
 import HallBookingPage from './pages/HallBookingPage';
 import HallBookingCheckout from './pages/HallBookingCheckout';
 import HallBookingSuccess from './pages/HallBookingSuccess';
@@ -19,6 +22,12 @@ import TermsAndConditions from './pages/TermsAndConditions';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 
 function App() {
+  // Start backend keep-alive on mount
+  useEffect(() => {
+    startKeepAlive();
+    return () => stopKeepAlive();
+  }, []);
+
   return (
     <CartProvider>
       <Routes>
@@ -51,6 +60,7 @@ function App() {
           <Route path="products" element={<AdminProducts />} />
           <Route path="payments" element={<AdminPayments />} />
           <Route path="hall-bookings" element={<AdminHallBookings />} />
+          <Route path="change-password" element={<AdminChangePassword />} />
         </Route>
       </Routes>
       <Toaster position="top-center" />

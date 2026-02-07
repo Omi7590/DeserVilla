@@ -351,7 +351,7 @@ const MenuPage = () => {
                 <h2 className="section-title capitalize">{category}</h2>
                 <div className="h-1 flex-1 bg-gradient-to-l from-primary-500 to-transparent rounded-full animate-slide-up"></div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-3">
                 {items.map((item, itemIndex) => (
                   <div 
                     key={item.id} 
@@ -401,8 +401,8 @@ const MenuPage = () => {
               </button>
             </div>
             
-            <div className="grid grid-cols-4 gap-3 mb-6">
-              {[1, 2, 3, 4, 5, 6, 7].map((table) => (
+            <div className="grid grid-cols-3 gap-3 mb-6">
+              {[1, 2, 3, 4, 5, 6].map((table) => (
                 <button
                   key={table}
                   onClick={() => handleTableSelect(table)}

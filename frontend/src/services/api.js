@@ -11,7 +11,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json'
   },
-  timeout: 10000 // 10 second timeout
+  timeout: 30000 // 30 second timeout for slower networks
 });
 
 // Add response interceptor for debugging
@@ -54,6 +54,7 @@ export const orderAPI = {
 export const adminAPI = {
   // Auth
   login: (credentials) => api.post('/admin/login', credentials),
+  changePassword: (data) => api.post('/admin/change-password', data),
   
   // Dashboard
   getDashboardStats: () => api.get('/admin/dashboard-stats'),

@@ -12,7 +12,7 @@ UPDATE menu_items SET image_url = 'https://images.unsplash.com/photo-16063135642
 UPDATE menu_items SET image_url = 'https://images.unsplash.com/photo-1572442388796-11668a67e53d?w=800&h=600&fit=crop&q=80' WHERE name = 'Cappuccino';
 UPDATE menu_items SET image_url = 'https://images.unsplash.com/photo-1461023058943-07fcbe16d735?w=800&h=600&fit=crop&q=80' WHERE name = 'Latte';
 UPDATE menu_items SET image_url = 'https://images.unsplash.com/photo-1517487881594-2787fef5ebf7?w=800&h=600&fit=crop&q=80' WHERE name = 'Mocha';
-UPDATE menu_items SET image_url = 'https://images.unsplash.com/photo-1517487881594-2787fef5ebf7?w=800&h=600&fit=crop&q=80' WHERE name = 'Hot Chocolate';
+
 UPDATE menu_items SET image_url = 'https://images.unsplash.com/photo-1517487881594-2787fef5ebf7?w=800&h=600&fit=crop&q=80' WHERE name = 'Iced Coffee';
 
 -- Snacks

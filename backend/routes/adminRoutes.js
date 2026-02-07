@@ -10,7 +10,8 @@ import {
   updateProductAvailability,
   deleteProduct,
   forceDeleteProduct,
-  getPayments
+  getPayments,
+  changePassword
 } from '../controllers/adminController.js';
 import { authenticateAdmin } from '../middleware/auth.js';
 
@@ -18,6 +19,7 @@ const router = express.Router();
 
 // Authentication
 router.post('/login', adminLogin);
+router.post('/change-password', authenticateAdmin, changePassword);
 
 // Dashboard
 router.get('/dashboard-stats', authenticateAdmin, getDashboardStats);

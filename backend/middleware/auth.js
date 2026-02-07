@@ -12,7 +12,8 @@ export const authenticateAdmin = (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.adminId = decoded.adminId;
+    req.admin = decoded; // Store the entire decoded token
+    req.adminId = decoded.adminId; // Keep for backward compatibility
     next();
   } catch (error) {
     return res.status(401).json({ error: 'Invalid or expired token' });

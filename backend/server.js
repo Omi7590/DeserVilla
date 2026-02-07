@@ -21,6 +21,7 @@ const allowedOrigins = [
   'http://127.0.0.1:5173',
   'http://127.0.0.1:5176',
   'http://192.168.156.86:5173', // Allow access from network IP
+  'http://192.168.203.86:5173', // Current network IP
   'https://deser-villa.vercel.app', // Vercel deployment
   'https://desertvilla.in', // Custom domain
   'https://www.desertvilla.in' // Custom domain with www
@@ -71,9 +72,25 @@ checkTables().catch(err => {
   console.error('Error during table check:', err);
 });
 
+// Get local network IP
+import os from 'os';
+function getLocalIP() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      // Skip internal and non-IPv4 addresses
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return 'localhost';
+}
+
 app.listen(PORT, '0.0.0.0', () => {
+  const networkIP = getLocalIP();
   console.log(`Server running on port ${PORT}`);
   console.log(`Local: http://localhost:${PORT}`);
-  console.log(`Network: http://192.168.156.86:${PORT}`);
+  console.log(`Network: http://${networkIP}:${PORT}`);
 });
 
