@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import { useCart } from '../context/CartContext';
 import { menuAPI, orderAPI } from '../services/api';
 import { loadRazorpayScript, openRazorpayCheckout } from '../utils/razorpay';
-import { ShoppingCart, Plus, Minus, Trash2, Calendar, Loader2, ChevronRight, Home } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Trash2, Calendar, Loader2, ChevronRight, Home, QrCode } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 const MenuPageMobile = () => {
   const { cart, addToCart, removeFromCart, updateQuantity, tableNumber, selectTable, clearCart, getTotal } = useCart();
@@ -13,12 +13,22 @@ const MenuPageMobile = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   useEffect(() => {
     loadRazorpayScript();
     fetchMenu();
-  }, []);
+    
+    // Get table number from URL parameter
+    const tableParam = searchParams.get('table');
+    if (tableParam) {
+      const tableNum = parseInt(tableParam);
+      if (tableNum >= 1 && tableNum <= 10) {
+        selectTable(tableNum);
+      }
+    }
+  }, [searchParams]);
 
   const fetchMenu = async () => {
     try {
@@ -46,7 +56,7 @@ const MenuPageMobile = () => {
     }
 
     if (!tableNumber) {
-      toast.error('Please select your table number');
+      toast.error('Please scan the QR code on your table');
       return;
     }
 
@@ -140,34 +150,28 @@ const MenuPageMobile = () => {
             </button>
           </div>
 
-          {/* Table Selector */}
-          {!tableNumber ? (
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3">
-              <p className="text-sm text-primary-100 mb-2">Select your table:</p>
-              <div className="grid grid-cols-5 gap-2">
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((table) => (
-                  <button
-                    key={table}
-                    onClick={() => selectTable(table)}
-                    className="bg-white text-primary-600 font-bold py-2 rounded-lg hover:bg-primary-50 transition-all"
-                  >
-                    {table}
-                  </button>
-                ))}
+          {/* Table Display - Read Only */}
+          {tableNumber ? (
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 flex items-center justify-between">
+              <div>
+                <p className="text-xs text-primary-100">Your Table</p>
+                <p className="text-2xl font-bold">Table {tableNumber}</p>
+              </div>
+              <div className="bg-white/20 p-2 rounded-lg">
+                <QrCode className="w-5 h-5" />
               </div>
             </div>
           ) : (
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 flex items-center justify-between">
-              <div>
-                <p className="text-xs text-primary-100">Table Number</p>
-                <p className="text-lg font-bold">{tableNumber}</p>
+            <div className="bg-yellow-500/20 backdrop-blur-sm rounded-xl p-4 border-2 border-yellow-500/50">
+              <div className="flex items-start gap-3">
+                <QrCode className="w-6 h-6 text-yellow-300 flex-shrink-0 mt-1" />
+                <div>
+                  <p className="text-sm font-bold text-yellow-100 mb-1">Scan QR Code Required</p>
+                  <p className="text-xs text-yellow-200">
+                    Please scan the QR code on your table to start ordering
+                  </p>
+                </div>
               </div>
-              <button
-                onClick={() => selectTable(null)}
-                className="text-sm text-white/80 hover:text-white"
-              >
-                Change
-              </button>
             </div>
           )}
         </div>
@@ -378,7 +382,7 @@ const MenuPageMobile = () => {
                   disabled={!tableNumber}
                   className="w-full bg-gradient-to-r from-primary-600 to-primary-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-lg transition-all disabled:bg-gray-300 disabled:cursor-not-allowed"
                 >
-                  {tableNumber ? 'Proceed to Payment' : 'Select Table First'}
+                  {tableNumber ? 'Proceed to Payment' : 'Scan QR Code First'}
                 </button>
               </div>
             )}

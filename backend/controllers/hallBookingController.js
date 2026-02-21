@@ -42,14 +42,18 @@ export const checkHourlyAvailability = async (req, res, next) => {
       return res.status(400).json({ error: 'Cannot book past dates' });
     }
 
-    // Get all booked slots for this date (only confirmed bookings with advance paid)
+    // Get all booked slots for this date
+    // Modified to include CASH bookings which are CONFIRMED but PENDING payment
     const bookedSlotsResult = await pool.query(
       `SELECT start_time 
        FROM hall_booking_slots hbs
        JOIN hall_bookings hb ON hbs.booking_id = hb.id
        WHERE hbs.booking_date = ?
        AND hb.booking_status = 'CONFIRMED'
-       AND (hb.payment_status = 'ADVANCE_PAID' OR hb.payment_status = 'FULL_PAID')`,
+       AND (
+         hb.payment_status IN ('ADVANCE_PAID', 'FULL_PAID', 'PAID') 
+         OR (hb.payment_method = 'CASH' AND hb.payment_status = 'PENDING')
+       )`,
       [bookingDate]
     );
 
@@ -57,7 +61,7 @@ export const checkHourlyAvailability = async (req, res, next) => {
 
     // Generate all available slots
     const allSlots = generateHourlySlots();
-    
+
     // If it's today, filter out past hours
     const now = new Date();
     const currentHour = now.getHours();
@@ -66,7 +70,7 @@ export const checkHourlyAvailability = async (req, res, next) => {
     const availableSlots = allSlots.map(slot => {
       const isBooked = bookedTimes.includes(slot.startTime);
       const isPast = isToday && slot.hour < currentHour;
-      
+
       return {
         hour: slot.hour,
         startTime: slot.startTime,
@@ -118,7 +122,10 @@ export const checkAvailability = async (req, res, next) => {
        WHERE booking_date = ? 
        AND time_slot = ? 
        AND booking_status = 'CONFIRMED' 
-       AND (payment_status = 'ADVANCE_PAID' OR payment_status = 'FULL_PAID')`,
+       AND (
+         payment_status IN ('ADVANCE_PAID', 'FULL_PAID', 'PAID')
+         OR (payment_method = 'CASH' AND payment_status = 'PENDING')
+       )`,
       [bookingDate, timeSlot]
     );
 
@@ -135,7 +142,7 @@ export const checkAvailability = async (req, res, next) => {
   }
 };
 
-// Create hourly booking (before payment)
+// Create hourly booking
 export const createHourlyBooking = async (req, res, next) => {
   const client = await pool.connect();
 
@@ -148,7 +155,8 @@ export const createHourlyBooking = async (req, res, next) => {
       bookingDate,
       selectedSlots, // Array of hour numbers [10, 11, 12, 13]
       occasion,
-      specialRequest
+      specialRequest,
+      paymentMethod // 'ONLINE' or 'CASH'
     } = req.body;
 
     // Validation
@@ -156,6 +164,8 @@ export const createHourlyBooking = async (req, res, next) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'Missing required fields' });
     }
+
+    const payMethod = paymentMethod === 'CASH' ? 'CASH' : 'ONLINE';
 
     // Validate slots are consecutive
     const sortedSlots = [...selectedSlots].sort((a, b) => a - b);
@@ -185,7 +195,7 @@ export const createHourlyBooking = async (req, res, next) => {
 
     // Check if any selected slots are already booked (transaction-safe)
     const slotTimeStrings = sortedSlots.map(hour => `${hour.toString().padStart(2, '0')}:00:00`);
-    
+
     const availabilityCheck = await client.query(
       `SELECT hbs.start_time 
        FROM hall_booking_slots hbs
@@ -193,30 +203,40 @@ export const createHourlyBooking = async (req, res, next) => {
        WHERE hbs.booking_date = $1
        AND hbs.start_time IN (${slotTimeStrings.map((_, i) => `$${i + 2}`).join(', ')})
        AND hb.booking_status = 'CONFIRMED'
-       AND (hb.payment_status = 'ADVANCE_PAID' OR hb.payment_status = 'FULL_PAID')
+       AND (
+         hb.payment_status IN ('ADVANCE_PAID', 'FULL_PAID', 'PAID')
+         OR (hb.payment_method = 'CASH' AND hb.payment_status = 'PENDING')
+       )
        FOR UPDATE`,
       [bookingDate, ...slotTimeStrings]
     );
 
     if (availabilityCheck.rows.length > 0) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Some selected slots are already booked',
         bookedSlots: availabilityCheck.rows.map(row => row.start_time)
       });
     }
 
-    // Calculate amounts (50% advance payment)
+    // Calculate amounts (50% advance payment for ONLINE, or full amount tracked)
     const totalHours = sortedSlots.length;
     const totalAmount = totalHours * HOUR_PRICE;
     const advanceAmount = Math.round((totalAmount / 2) * 100) / 100; // Round to 2 decimals
     const remainingAmount = totalAmount - advanceAmount;
 
+    // Determine Statuses
+    // If CASH: Booking CONFIRMED immediately, Payment PENDING
+    // If ONLINE: Booking PENDING, Payment PENDING (wait for callbacks)
+    const bookingStatus = payMethod === 'CASH' ? 'CONFIRMED' : 'PENDING';
+
     // Create booking entry
     const bookingResult = await client.query(
       `INSERT INTO hall_bookings 
-       (customer_name, mobile, booking_date, time_slot, people_count, occasion, special_request, advance_amount, remaining_amount, total_hours, total_amount, payment_mode, payment_status, booking_status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 'PENDING')`,
+       (customer_name, mobile, booking_date, time_slot, people_count, occasion, special_request, 
+        advance_amount, remaining_amount, total_hours, total_amount, 
+        payment_mode, payment_method, payment_status, booking_status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?)`,
       [
         customerName,
         mobile,
@@ -229,7 +249,9 @@ export const createHourlyBooking = async (req, res, next) => {
         remainingAmount,
         totalHours,
         totalAmount,
-        'ONLINE_ADVANCE'
+        payMethod === 'CASH' ? 'CASH' : 'ONLINE_ADVANCE', // Legacy payment_mode
+        payMethod,
+        bookingStatus
       ]
     );
 
@@ -237,11 +259,11 @@ export const createHourlyBooking = async (req, res, next) => {
     const idResult = await client.query('SELECT LAST_INSERT_ID() as id');
     const bookingId = idResult.rows[0]?.id;
 
-    // Create slot entries (but don't commit yet - wait for payment)
+    // Create slot entries
     for (const hour of sortedSlots) {
       const startTime = `${hour.toString().padStart(2, '0')}:00:00`;
       const endTime = `${(hour + 1).toString().padStart(2, '0')}:00:00`;
-      
+
       await client.query(
         `INSERT INTO hall_booking_slots (booking_id, booking_date, start_time, end_time)
          VALUES (?, ?, ?, ?)`,
@@ -259,17 +281,21 @@ export const createHourlyBooking = async (req, res, next) => {
       advanceAmount,
       remainingAmount,
       selectedSlots: sortedSlots,
-      message: 'Booking created. Proceed to advance payment.'
+      paymentMethod: payMethod,
+      bookingStatus,
+      message: payMethod === 'CASH'
+        ? 'Booking confirmed. Please pay at the counter.'
+        : 'Booking created. Proceed to advance payment.'
     });
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Error creating booking:', error);
-    
+
     // Handle duplicate key error
     if (error.code === 'ER_DUP_ENTRY' || error.code === '23505') {
       return res.status(400).json({ error: 'Some slots are already booked. Please refresh and try again.' });
     }
-    
+
     next(error);
   } finally {
     client.release();
@@ -279,7 +305,7 @@ export const createHourlyBooking = async (req, res, next) => {
 // Create booking (legacy - for backward compatibility)
 export const createBooking = async (req, res, next) => {
   const client = await pool.connect();
-  
+
   try {
     await client.query('BEGIN');
 
@@ -291,7 +317,8 @@ export const createBooking = async (req, res, next) => {
       peopleCount,
       occasion,
       specialRequest,
-      advanceAmount
+      advanceAmount,
+      paymentMethod
     } = req.body;
 
     // Validation
@@ -299,6 +326,8 @@ export const createBooking = async (req, res, next) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'Missing required fields' });
     }
+
+    const payMethod = paymentMethod === 'CASH' ? 'CASH' : 'ONLINE';
 
     // Validate time slot
     const validSlots = ['morning', 'evening', 'full_day'];
@@ -320,7 +349,10 @@ export const createBooking = async (req, res, next) => {
        WHERE booking_date = ? 
        AND time_slot = ? 
        AND booking_status = 'CONFIRMED' 
-       AND (payment_status = 'ADVANCE_PAID' OR payment_status = 'FULL_PAID')
+       AND (
+         payment_status IN ('ADVANCE_PAID', 'FULL_PAID', 'PAID')
+         OR (payment_method = 'CASH' AND payment_status = 'PENDING')
+       )
        FOR UPDATE`,
       [bookingDate, timeSlot]
     );
@@ -330,19 +362,36 @@ export const createBooking = async (req, res, next) => {
       return res.status(400).json({ error: 'Slot is not available' });
     }
 
+    const bookingStatus = payMethod === 'CASH' ? 'CONFIRMED' : 'PENDING';
+
     // Create booking
     const bookingResult = await client.query(
       `INSERT INTO hall_bookings 
-       (customer_name, mobile, booking_date, time_slot, people_count, occasion, special_request, advance_amount, payment_status, booking_status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 'PENDING')`,
-      [customerName, mobile, bookingDate, timeSlot, peopleCount, occasion || null, specialRequest || null, advanceAmount]
+       (customer_name, mobile, booking_date, time_slot, people_count, occasion, special_request, 
+        advance_amount, payment_mode, payment_method, payment_status, booking_status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?)`,
+      [
+        customerName,
+        mobile,
+        bookingDate,
+        timeSlot,
+        peopleCount,
+        occasion || null,
+        specialRequest || null,
+        advanceAmount,
+        payMethod === 'CASH' ? 'CASH' : 'ONLINE_ADVANCE',
+        payMethod,
+        bookingStatus
+      ]
     );
 
     // Get the inserted booking ID
     const idResult = await client.query('SELECT LAST_INSERT_ID() as id');
     const bookingId = idResult.rows[0]?.id;
 
-    // Block slot
+    // Block slot (For legacy, we block immediately. For online pending, we block but risk unblocking if not paid? 
+    // Actually legacy logic creates blocked_slots immediately.
+    // We should do same here.
     await client.query(
       `INSERT INTO blocked_slots (booking_date, time_slot, booking_id)
        VALUES (?, ?, ?)`,
@@ -354,7 +403,11 @@ export const createBooking = async (req, res, next) => {
     res.json({
       success: true,
       bookingId,
-      message: 'Booking created. Proceed to payment.'
+      paymentMethod: payMethod,
+      bookingStatus,
+      message: payMethod === 'CASH'
+        ? 'Booking confirmed. Please pay at the counter.'
+        : 'Booking created. Proceed to payment.'
     });
   } catch (error) {
     await client.query('ROLLBACK');
@@ -375,8 +428,8 @@ export const createPaymentOrder = async (req, res, next) => {
 
     // Validate Razorpay configuration
     if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
-      return res.status(500).json({ 
-        error: 'Razorpay configuration missing. Please add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to .env file' 
+      return res.status(500).json({
+        error: 'Razorpay configuration missing. Please add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to .env file'
       });
     }
 
@@ -394,7 +447,7 @@ export const createPaymentOrder = async (req, res, next) => {
 
     const booking = bookingResult.rows[0];
 
-    if (booking.payment_status === 'ADVANCE_PAID' || booking.payment_status === 'FULL_PAID') {
+    if (booking.payment_status === 'ADVANCE_PAID' || booking.payment_status === 'FULL_PAID' || booking.payment_status === 'PAID') {
       return res.status(400).json({ error: 'Booking already paid' });
     }
 
@@ -480,28 +533,26 @@ export const verifyPayment = async (req, res, next) => {
 
     const booking = bookingResult.rows[0];
 
-    if (booking.payment_status === 'PAID') {
+    if (booking.payment_status === 'PAID' || booking.payment_status === 'ADVANCE_PAID') {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'Booking already paid' });
     }
 
-    // Update booking payment status to ADVANCE_PAID
+    // Update booking payment status to ADVANCE_PAID, status CONFIRMED
     await client.query(
       `UPDATE hall_bookings 
        SET payment_status = 'ADVANCE_PAID', 
            razorpay_payment_id = ?,
            booking_status = 'CONFIRMED',
-           updated_at = CURRENT_TIMESTAMP
+           updated_at = CURRENT_TIMESTAMP,
+           paid_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
       [razorpayPaymentId, bookingId]
     );
 
-    // For hourly bookings, slots are already created, just ensure they're marked as confirmed
+    // For hourly bookings, slots are already created
     // For legacy bookings, ensure slot is blocked
-    if (booking.time_slot === 'hourly') {
-      // Slots already exist in hall_booking_slots, no need to do anything
-    } else {
-      // Legacy booking - ensure slot is blocked
+    if (booking.time_slot !== 'hourly' && !booking.total_hours) {
       try {
         await client.query(
           `INSERT INTO blocked_slots (booking_date, time_slot, booking_id)
@@ -509,16 +560,14 @@ export const verifyPayment = async (req, res, next) => {
           [booking.booking_date, booking.time_slot, bookingId]
         );
       } catch (insertError) {
-        // If duplicate key error, update instead
         if (insertError.code === 'ER_DUP_ENTRY' || insertError.code === '23505') {
+          // Already blocked, ensure it's for this booking
           await client.query(
-            `UPDATE blocked_slots 
-             SET booking_id = ? 
-             WHERE booking_date = ? AND time_slot = ?`,
+            `UPDATE blocked_slots SET booking_id = ? WHERE booking_date = ? AND time_slot = ?`,
             [bookingId, booking.booking_date, booking.time_slot]
           );
         } else {
-          throw insertError;
+          // ignore
         }
       }
     }
@@ -533,18 +582,9 @@ export const verifyPayment = async (req, res, next) => {
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Payment verification error:', error);
-    console.error('Error details:', {
-      message: error.message,
-      stack: error.stack,
-      bookingId: req.body?.bookingId,
-      razorpayOrderId: req.body?.razorpayOrderId
-    });
-    
-    // Return more detailed error response
-    res.status(error.status || 500).json({
+    res.status(500).json({
       success: false,
-      error: error.message || 'Payment verification failed',
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      error: error.message || 'Payment verification failed'
     });
   } finally {
     client.release();
@@ -556,8 +596,6 @@ export const getAllBookings = async (req, res, next) => {
   try {
     const { status } = req.query;
 
-    // Build query with optional columns (handle missing columns gracefully)
-    // First, try to select all columns, but handle errors if they don't exist
     let query = `
       SELECT 
         id,
@@ -573,6 +611,7 @@ export const getAllBookings = async (req, res, next) => {
         total_hours,
         IFNULL(total_amount, IFNULL(advance_amount, 0)) as total_amount,
         IFNULL(payment_mode, 'ONLINE_ADVANCE') as payment_mode,
+        payment_method,
         payment_status,
         booking_status,
         razorpay_payment_id,
@@ -591,18 +630,12 @@ export const getAllBookings = async (req, res, next) => {
 
     const result = await pool.query(query, params);
 
-    // Get slots for each booking
+    // Get slots... (existing logic remains same)
     const bookings = await Promise.all(result.rows.map(async (booking) => {
       let slots = [];
-      
-      // Check if it's an hourly booking (new system) or legacy booking
       if (booking.time_slot === 'hourly' || booking.total_hours) {
-        // Get hourly slots
         const slotsResult = await pool.query(
-          `SELECT start_time, end_time 
-           FROM hall_booking_slots 
-           WHERE booking_id = ? 
-           ORDER BY start_time`,
+          `SELECT start_time, end_time FROM hall_booking_slots WHERE booking_id = ? ORDER BY start_time`,
           [booking.id]
         );
         slots = slotsResult.rows.map(row => ({
@@ -613,25 +646,11 @@ export const getAllBookings = async (req, res, next) => {
       }
 
       return {
-        id: booking.id,
-        customerName: booking.customer_name,
-        mobile: booking.mobile,
-        bookingDate: booking.booking_date,
-        timeSlot: booking.time_slot,
-        peopleCount: booking.people_count,
-        occasion: booking.occasion,
-        specialRequest: booking.special_request,
+        ...booking,
         advanceAmount: parseFloat(booking.advance_amount || 0),
         remainingAmount: parseFloat(booking.remaining_amount || 0),
-        totalHours: booking.total_hours || null,
-        totalAmount: parseFloat(booking.total_amount || booking.advance_amount || 0),
-        paymentMode: booking.payment_mode || 'ONLINE_ADVANCE',
-        paymentStatus: booking.payment_status,
-        bookingStatus: booking.booking_status,
-        razorpayPaymentId: booking.razorpay_payment_id,
-        slots: slots,
-        createdAt: booking.created_at,
-        updatedAt: booking.updated_at
+        totalAmount: parseFloat(booking.total_amount || 0),
+        slots
       };
     }));
 
@@ -640,24 +659,6 @@ export const getAllBookings = async (req, res, next) => {
       bookings
     });
   } catch (error) {
-    console.error('Error fetching hall bookings:', error);
-    console.error('Error details:', {
-      message: error.message,
-      code: error.code,
-      sqlState: error.sqlState,
-      sqlMessage: error.sqlMessage,
-      stack: error.stack
-    });
-    
-    // Return more specific error
-    if (error.code === 'ER_BAD_FIELD_ERROR') {
-      return res.status(500).json({
-        success: false,
-        error: 'Database schema mismatch. Please run the migration scripts: hall_booking_hourly_schema.sql and hall_booking_advance_payment_schema.sql',
-        details: error.sqlMessage
-      });
-    }
-    
     next(error);
   }
 };
@@ -746,41 +747,32 @@ export const markRemainingPaymentPaid = async (req, res, next) => {
 
     const booking = bookingResult.rows[0];
 
-    // Check if advance is already paid
-    if (booking.payment_status !== 'ADVANCE_PAID') {
-      return res.status(400).json({ 
-        error: 'Advance payment must be paid before marking remaining as paid',
-        currentStatus: booking.payment_status
-      });
-    }
-
-    // Check if remaining amount exists
-    const remainingAmount = parseFloat(booking.remaining_amount || 0);
-    if (remainingAmount <= 0) {
-      return res.status(400).json({ error: 'No remaining amount to mark as paid' });
-    }
+    // Check if advance is already paid - With new system, CASH might be PENDING
+    // Allow marking FULL_PAID if it's PENDING also (for full cash payment)
 
     // Update payment status to FULL_PAID
     await pool.query(
       `UPDATE hall_bookings 
-       SET payment_status = 'FULL_PAID', 
+       SET payment_status = 'PAID', 
            remaining_amount = 0,
-           updated_at = CURRENT_TIMESTAMP 
+           updated_at = CURRENT_TIMESTAMP,
+           paid_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
       [bookingId]
     );
 
     res.json({
       success: true,
-      message: 'Remaining payment marked as paid successfully',
+      message: 'Payment marked as paid successfully',
       booking: {
         id: bookingId,
-        paymentStatus: 'FULL_PAID',
+        paymentStatus: 'PAID',
         totalPaid: parseFloat(booking.total_amount || 0)
       }
     });
   } catch (error) {
-    console.error('Error marking remaining payment:', error);
+    console.error('Error marking payment:', error);
     next(error);
   }
 };
+

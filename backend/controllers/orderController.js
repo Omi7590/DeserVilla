@@ -1,15 +1,16 @@
 import pool from '../config/database.js';
 import { razorpay } from '../config/razorpay.js';
 import crypto from 'crypto';
+import { notifyNewOrder, notifyCashPaymentPending, notifyPaymentReceived } from '../services/notificationService.js';
 
 export const createOrder = async (req, res, next) => {
   try {
-    const { tableId, tableNumber, items, totalAmount } = req.body;
-    
+    const { tableId, tableNumber, items, totalAmount, paymentMethod } = req.body;
+
     if ((!tableId && !tableNumber) || !items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Invalid order data' });
     }
-    
+
     // Validate table exists - support both tableId and tableNumber
     let tableCheck;
     if (tableNumber) {
@@ -23,13 +24,13 @@ export const createOrder = async (req, res, next) => {
         [tableId]
       );
     }
-    
+
     if (tableCheck.rows.length === 0) {
       return res.status(404).json({ error: 'Table not found' });
     }
-    
+
     const actualTableId = tableCheck.rows[0].id;
-    
+
     // Validate menu items and calculate total
     let calculatedTotal = 0;
     for (const item of items) {
@@ -37,42 +38,54 @@ export const createOrder = async (req, res, next) => {
         'SELECT id, price, is_available FROM menu_items WHERE id = $1',
         [item.menuItemId]
       );
-      
+
       if (menuItem.rows.length === 0) {
         return res.status(404).json({ error: `Menu item ${item.menuItemId} not found` });
       }
-      
+
       if (!menuItem.rows[0].is_available) {
         return res.status(400).json({ error: `Menu item ${item.menuItemId} is not available` });
       }
-      
+
       calculatedTotal += parseFloat(menuItem.rows[0].price) * item.quantity;
     }
-    
+
+    const payMethod = paymentMethod === 'ONLINE' ? 'ONLINE' : 'CASH';
+
     // Create order in database
+    // For CASH orders, payment_status is 'pending'
+    // For ONLINE orders, payment_status is 'pending' until payment is verified
     const orderResult = await pool.query(
-      `INSERT INTO orders (table_id, total_amount, payment_status, order_status)
-       VALUES ($1, $2, 'pending', 'pending')
-       RETURNING id, table_id, total_amount, payment_status, order_status, created_at`,
-      [actualTableId, calculatedTotal]
+      `INSERT INTO orders (table_id, total_amount, payment_status, order_status, payment_method)
+       VALUES ($1, $2, 'pending', 'pending', $3)
+       RETURNING id, table_id, total_amount, payment_status, order_status, payment_method, created_at`,
+      [actualTableId, calculatedTotal, payMethod]
     );
-    
+
     const order = orderResult.rows[0];
-    
+
     // Insert order items
     for (const item of items) {
       const menuItem = await pool.query(
         'SELECT price FROM menu_items WHERE id = $1',
         [item.menuItemId]
       );
-      
+
       await pool.query(
         `INSERT INTO order_items (order_id, menu_item_id, quantity, price)
          VALUES ($1, $2, $3, $4)`,
         [order.id, item.menuItemId, item.quantity, menuItem.rows[0].price]
       );
     }
-    
+
+    // Create notification for new order
+    await notifyNewOrder(order.id, tableCheck.rows[0].table_number, calculatedTotal);
+
+    // If cash payment, create additional notification
+    if (payMethod === 'CASH') {
+      await notifyCashPaymentPending(order.id, tableCheck.rows[0].table_number, calculatedTotal);
+    }
+
     res.json({
       success: true,
       order: {
@@ -80,7 +93,8 @@ export const createOrder = async (req, res, next) => {
         tableId: order.table_id,
         totalAmount: parseFloat(order.total_amount),
         paymentStatus: order.payment_status,
-        orderStatus: order.order_status
+        orderStatus: order.order_status,
+        paymentMethod: order.payment_method
       }
     });
   } catch (error) {
@@ -91,31 +105,31 @@ export const createOrder = async (req, res, next) => {
 export const createPaymentOrder = async (req, res, next) => {
   try {
     const { orderId, amount } = req.body;
-    
+
     if (!orderId || !amount) {
       return res.status(400).json({ error: 'Order ID and amount are required' });
     }
-    
+
     // Verify order exists
     const orderResult = await pool.query(
       'SELECT id, total_amount, payment_status FROM orders WHERE id = $1',
       [orderId]
     );
-    
+
     if (orderResult.rows.length === 0) {
       return res.status(404).json({ error: 'Order not found' });
     }
-    
+
     const order = orderResult.rows[0];
-    
+
     if (order.payment_status === 'paid') {
       return res.status(400).json({ error: 'Order already paid' });
     }
-    
+
     // Validate Razorpay configuration
     if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
-      return res.status(500).json({ 
-        error: 'Razorpay configuration missing. Please add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to .env file' 
+      return res.status(500).json({
+        error: 'Razorpay configuration missing. Please add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to .env file'
       });
     }
 
@@ -128,13 +142,13 @@ export const createPaymentOrder = async (req, res, next) => {
         orderId: orderId.toString()
       }
     });
-    
+
     // Update order with Razorpay order ID
     await pool.query(
       'UPDATE orders SET razorpay_order_id = $1 WHERE id = $2',
       [razorpayOrder.id, orderId]
     );
-    
+
     res.json({
       success: true,
       razorpayOrderId: razorpayOrder.id,
@@ -151,52 +165,56 @@ export const createPaymentOrder = async (req, res, next) => {
 export const verifyPayment = async (req, res, next) => {
   try {
     const { razorpayOrderId, razorpayPaymentId, razorpaySignature, orderId } = req.body;
-    
+
     if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature || !orderId) {
       return res.status(400).json({ error: 'Missing payment verification data' });
     }
-    
+
     // Verify signature using Razorpay
     const text = `${razorpayOrderId}|${razorpayPaymentId}`;
     const generatedSignature = crypto
       .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
       .update(text)
       .digest('hex');
-    
+
     if (generatedSignature !== razorpaySignature) {
       return res.status(400).json({ error: 'Invalid payment signature' });
     }
-    
+
     // Get order amount for payment record
     const orderResult = await pool.query(
       'SELECT total_amount FROM orders WHERE id = $1',
       [orderId]
     );
-    
+
     if (orderResult.rows.length === 0) {
       return res.status(404).json({ error: 'Order not found' });
     }
-    
+
     const orderAmount = parseFloat(orderResult.rows[0].total_amount);
-    
-    // Update order payment status
+
+    // Update order payment status to 'paid' (lowercase for consistency)
     await pool.query(
       `UPDATE orders 
        SET payment_status = 'paid', 
            razorpay_payment_id = $1,
-           updated_at = CURRENT_TIMESTAMP
+           updated_at = CURRENT_TIMESTAMP,
+           paid_at = CURRENT_TIMESTAMP
        WHERE id = $2`,
       [razorpayPaymentId, orderId]
     );
-    
-    // Insert payment record (if payments table exists)
+
+    // Create notification for payment received
+    await notifyPaymentReceived(orderId, orderAmount, 'ONLINE');
+
+    // Insert payment record
     try {
       // Check if payment record already exists
       const existingPayment = await pool.query(
         'SELECT id FROM payments WHERE order_id = $1',
         [orderId]
       );
-      
+
       if (existingPayment.rows.length > 0) {
         // Update existing payment record
         await pool.query(
@@ -217,13 +235,39 @@ export const verifyPayment = async (req, res, next) => {
         );
       }
     } catch (error) {
-      // If payments table doesn't exist, just log and continue
       console.log('Payments table not found or error inserting payment:', error.message);
     }
-    
+
     res.json({
       success: true,
       message: 'Payment verified successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const markOrderAsPaid = async (req, res, next) => {
+  try {
+    const { orderId } = req.params;
+
+    const orderResult = await pool.query('SELECT id FROM orders WHERE id = $1', [orderId]);
+    if (orderResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    await pool.query(
+      `UPDATE orders 
+       SET payment_status = 'paid',
+           updated_at = CURRENT_TIMESTAMP,
+           paid_at = CURRENT_TIMESTAMP
+       WHERE id = $1`,
+      [orderId]
+    );
+
+    res.json({
+      success: true,
+      message: 'Order marked as paid successfully'
     });
   } catch (error) {
     next(error);

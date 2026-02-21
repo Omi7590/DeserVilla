@@ -4,6 +4,7 @@ import {
   getDashboardStats,
   getOrders,
   updateOrderStatus,
+  markOrderAsPaid,
   getProducts,
   createProduct,
   updateProduct,
@@ -13,6 +14,17 @@ import {
   getPayments,
   changePassword
 } from '../controllers/adminController.js';
+import {
+  getPaymentsSummary,
+  getPaymentsList,
+  markOrderCashPaid
+} from '../controllers/paymentController.js';
+import {
+  getNotificationsList,
+  markAsRead,
+  markAllAsRead,
+  getUnreadNotificationCount
+} from '../controllers/notificationController.js';
 import { authenticateAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -27,6 +39,8 @@ router.get('/dashboard-stats', authenticateAdmin, getDashboardStats);
 // Orders Management
 router.get('/orders', authenticateAdmin, getOrders);
 router.patch('/orders/:orderId/status', authenticateAdmin, updateOrderStatus);
+router.put('/orders/mark-paid/:orderId', authenticateAdmin, markOrderAsPaid);
+router.put('/orders/:id/mark-cash-paid', authenticateAdmin, markOrderCashPaid);
 
 // Products/Menu Management
 router.get('/products', authenticateAdmin, getProducts);
@@ -36,7 +50,15 @@ router.patch('/products/:productId/availability', authenticateAdmin, updateProdu
 router.delete('/products/:productId', authenticateAdmin, deleteProduct);
 router.delete('/products/:productId/force', authenticateAdmin, forceDeleteProduct);
 
-// Payments
-router.get('/payments', authenticateAdmin, getPayments);
+// Payments Management
+router.get('/payments', authenticateAdmin, getPayments); // Legacy endpoint
+router.get('/payments/list', authenticateAdmin, getPaymentsList);
+router.get('/payments/summary', authenticateAdmin, getPaymentsSummary);
+
+// Notifications Management
+router.get('/notifications', authenticateAdmin, getNotificationsList);
+router.get('/notifications/unread-count', authenticateAdmin, getUnreadNotificationCount);
+router.patch('/notifications/:id/read', authenticateAdmin, markAsRead);
+router.patch('/notifications/read-all', authenticateAdmin, markAllAsRead);
 
 export default router;

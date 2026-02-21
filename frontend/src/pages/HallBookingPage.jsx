@@ -69,11 +69,11 @@ const HallBookingPage = () => {
         if (sorted.length === 0) {
           return [hour];
         }
-        
+
         // Check if it's consecutive to existing selection
         const min = Math.min(...sorted);
         const max = Math.max(...sorted);
-        
+
         if (hour === min - 1 || hour === max + 1) {
           // Consecutive, add it
           sorted.push(hour);
@@ -151,7 +151,7 @@ const HallBookingPage = () => {
 
       if (bookingResponse.data && bookingResponse.data.success) {
         const { bookingId, totalAmount, advanceAmount, remainingAmount } = bookingResponse.data;
-        
+
         // Navigate to checkout
         navigate('/hall-booking/checkout', {
           state: {
@@ -255,13 +255,13 @@ const HallBookingPage = () => {
                 <p className="text-sm text-gray-600 mb-4">
                   Select consecutive hourly slots (10:00 AM - 8:00 PM)
                 </p>
-                
+
                 {/* Slot Grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                   {slots.map((slot) => {
                     const state = getSlotState(slot);
                     const isSelected = state === 'selected';
-                    
+
                     return (
                       <button
                         key={slot.hour}
@@ -270,13 +270,13 @@ const HallBookingPage = () => {
                         disabled={!slot.available || slot.past || slot.booked}
                         className={`
                           relative px-4 py-3 rounded-lg border-2 transition-all
-                          ${state === 'selected' 
-                            ? 'bg-primary-600 text-white border-primary-600 shadow-lg scale-105' 
+                          ${state === 'selected'
+                            ? 'bg-primary-600 text-white border-primary-600 shadow-lg scale-105'
                             : state === 'booked' || state === 'past'
-                            ? 'bg-gray-200 text-gray-400 border-gray-300 cursor-not-allowed'
-                            : state === 'available'
-                            ? 'bg-white text-gray-700 border-gray-300 hover:border-primary-600 hover:shadow-md'
-                            : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                              ? 'bg-gray-200 text-gray-400 border-gray-300 cursor-not-allowed'
+                              : state === 'available'
+                                ? 'bg-white text-gray-700 border-gray-300 hover:border-primary-600 hover:shadow-md'
+                                : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
                           }
                         `}
                       >
@@ -332,7 +332,7 @@ const HallBookingPage = () => {
                         </p>
                       </div>
                     </div>
-                    
+
                     <div className="border-t border-primary-200 pt-4">
                       <div className="grid grid-cols-2 gap-4">
                         <div className="bg-white rounded-lg p-3">
@@ -425,6 +425,60 @@ const HallBookingPage = () => {
             </div>
           )}
 
+          {/* Step 4: Payment Method */}
+          {selectedSlots.length > 0 && (
+            <div className="card">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-6 h-6 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 font-bold">₹</div>
+                <h2 className="text-2xl font-semibold text-gray-800">Payment Method</h2>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label className={`
+                  relative flex items-center p-4 border-2 rounded-xl cursor-pointer transition-all
+                  ${formData.paymentMethod === 'ONLINE'
+                    ? 'border-primary-600 bg-primary-50 ring-1 ring-primary-600'
+                    : 'border-gray-200 hover:border-primary-200 hover:bg-gray-50'
+                  }
+                `}>
+                  <input
+                    type="radio"
+                    name="paymentMethod"
+                    value="ONLINE"
+                    checked={formData.paymentMethod === 'ONLINE'}
+                    onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
+                    className="w-4 h-4 text-primary-600 border-gray-300 focus:ring-primary-500"
+                  />
+                  <div className="ml-3">
+                    <span className="block text-sm font-medium text-gray-900">Pay Online (Advance)</span>
+                    <span className="block text-sm text-gray-500">Secure payment via Razorpay</span>
+                  </div>
+                </label>
+
+                <label className={`
+                  relative flex items-center p-4 border-2 rounded-xl cursor-pointer transition-all
+                  ${formData.paymentMethod === 'CASH'
+                    ? 'border-primary-600 bg-primary-50 ring-1 ring-primary-600'
+                    : 'border-gray-200 hover:border-primary-200 hover:bg-gray-50'
+                  }
+                `}>
+                  <input
+                    type="radio"
+                    name="paymentMethod"
+                    value="CASH"
+                    checked={formData.paymentMethod === 'CASH'}
+                    onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
+                    className="w-4 h-4 text-primary-600 border-gray-300 focus:ring-primary-500"
+                  />
+                  <div className="ml-3">
+                    <span className="block text-sm font-medium text-gray-900">Pay at Counter</span>
+                    <span className="block text-sm text-gray-500">Pay cash when you arrive</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+          )}
+
           {/* Submit Button */}
           {selectedSlots.length > 0 && (
             <div className="card bg-gradient-to-r from-primary-600 to-orange-600 text-white">
@@ -438,11 +492,23 @@ const HallBookingPage = () => {
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm opacity-90 mb-1">Advance to Pay</p>
-                    <p className="text-2xl font-bold">₹{calculateAdvance().toLocaleString('en-IN')}</p>
-                    <p className="text-xs opacity-75 mt-1">
-                      Remaining: ₹{calculateRemaining().toLocaleString('en-IN')} at café
-                    </p>
+                    {formData.paymentMethod === 'ONLINE' ? (
+                      <>
+                        <p className="text-sm opacity-90 mb-1">Advance to Pay</p>
+                        <p className="text-2xl font-bold">₹{calculateAdvance().toLocaleString('en-IN')}</p>
+                        <p className="text-xs opacity-75 mt-1">
+                          Remaining: ₹{calculateRemaining().toLocaleString('en-IN')} at café
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm opacity-90 mb-1">Pay at Counter</p>
+                        <p className="text-2xl font-bold">₹{calculateTotal().toLocaleString('en-IN')}</p>
+                        <p className="text-xs opacity-75 mt-1">
+                          Full amount to be paid later
+                        </p>
+                      </>
+                    )}
                   </div>
                 </div>
                 <button
@@ -456,7 +522,9 @@ const HallBookingPage = () => {
                       Processing...
                     </>
                   ) : (
-                    `Pay Advance ₹${calculateAdvance().toLocaleString('en-IN')}`
+                    formData.paymentMethod === 'ONLINE'
+                      ? `Pay Advance ₹${calculateAdvance().toLocaleString('en-IN')}`
+                      : 'Confirm Booking (Pay at Counter)'
                   )}
                 </button>
               </div>

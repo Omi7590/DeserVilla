@@ -48,33 +48,43 @@ export const menuAPI = {
 export const orderAPI = {
   createOrder: (orderData) => api.post('/order', orderData),
   createPaymentOrder: (data) => api.post('/order/payment/create', data),
-  verifyPayment: (data) => api.post('/order/payment/verify', data)
+  verifyPayment: (data) => api.post('/order/payment/verify', data),
+  markAsPaid: (orderId) => api.put(`/order/mark-paid/${orderId}`)
 };
 
 export const adminAPI = {
   // Auth
   login: (credentials) => api.post('/admin/login', credentials),
   changePassword: (data) => api.post('/admin/change-password', data),
-  
+
   // Dashboard
   getDashboardStats: () => api.get('/admin/dashboard-stats'),
-  
+
   // Orders
   getOrders: (filters) => api.get('/admin/orders', { params: filters }),
-  updateOrderStatus: (orderId, orderStatus) => 
+  updateOrderStatus: (orderId, orderStatus) =>
     api.patch(`/admin/orders/${orderId}/status`, { orderStatus }),
-  
+  markOrderAsPaid: (orderId) => api.put(`/admin/orders/mark-paid/${orderId}`),
+  markCashOrderAsPaid: (orderId) => api.put(`/admin/orders/${orderId}/mark-cash-paid`),
+
   // Products
   getProducts: () => api.get('/admin/products'),
   createProduct: (productData) => api.post('/admin/products', productData),
-  updateProduct: (productId, productData) => 
+  updateProduct: (productId, productData) =>
     api.put(`/admin/products/${productId}`, productData),
   updateProductAvailability: (productId, isAvailable) =>
     api.patch(`/admin/products/${productId}/availability`, { isAvailable }),
   deleteProduct: (productId) => api.delete(`/admin/products/${productId}`),
-  
+
   // Payments
-  getPayments: (filters) => api.get('/admin/payments', { params: filters })
+  getPayments: (filters) => api.get('/admin/payments', { params: filters }),
+  getPaymentsList: (filters) => api.get('/admin/payments/list', { params: filters }),
+  getPaymentsSummary: () => api.get('/admin/payments/summary'),
+
+  // Notifications
+  getNotifications: () => api.get('/admin/notifications'),
+  markNotificationAsRead: (notificationId) => api.patch(`/admin/notifications/${notificationId}/read`),
+  markAllNotificationsAsRead: () => api.patch('/admin/notifications/read-all')
 };
 
 export const hallBookingAPI = {

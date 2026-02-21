@@ -1,18 +1,20 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { hallBookingAPI } from '../../services/api';
-import { 
-  Calendar, 
-  Clock, 
-  Users, 
-  Phone, 
-  DollarSign, 
-  CheckCircle, 
-  XCircle, 
+import {
+  Calendar,
+  Clock,
+  Users,
+  Phone,
+  DollarSign,
+  CheckCircle,
+  XCircle,
   AlertCircle,
   Loader2,
   Filter,
-  RefreshCw
+  RefreshCw,
+  CreditCard,
+  Banknote
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -33,13 +35,13 @@ const AdminHallBookings = () => {
       const response = await hallBookingAPI.getAllBookings(
         filterStatus !== 'all' ? filterStatus : undefined
       );
-      
+
       if (!response || !response.data) {
         throw new Error('Invalid response from server');
       }
-      
+
       let bookingsData = response.data.bookings || [];
-      
+
       // Normalize data format (backend returns camelCase, convert to snake_case for consistency)
       bookingsData = bookingsData.map(booking => ({
         id: booking.id,
@@ -61,14 +63,14 @@ const AdminHallBookings = () => {
         created_at: booking.createdAt || booking.created_at,
         updated_at: booking.updatedAt || booking.updated_at
       }));
-      
+
       // Filter by date if provided
       if (filterDate) {
         bookingsData = bookingsData.filter(
           booking => booking.booking_date === filterDate
         );
       }
-      
+
       setBookings(bookingsData);
     } catch (error) {
       console.error('Error fetching bookings:', error);
@@ -78,7 +80,7 @@ const AdminHallBookings = () => {
         status: error.response?.status,
         url: error.config?.url
       });
-      
+
       // Show more specific error message
       if (error.response?.status === 401) {
         toast.error('Authentication failed. Please login again.');
@@ -126,16 +128,22 @@ const AdminHallBookings = () => {
       COMPLETED: { color: 'bg-green-100 text-green-800', icon: CheckCircle },
       CANCELLED: { color: 'bg-red-100 text-red-800', icon: XCircle }
     };
-    
+
     const config = statusConfig[status] || { color: 'bg-gray-100 text-gray-800', icon: AlertCircle };
     const Icon = config.icon;
-    
+
     return (
       <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${config.color}`}>
         <Icon className="w-3 h-3" />
         {status}
       </span>
     );
+  };
+
+  const getPaymentMethodIcon = (method) => {
+    if (method === 'ONLINE') return <CreditCard className="w-3 h-3" />;
+    if (method === 'CASH') return <Banknote className="w-3 h-3" />;
+    return <CreditCard className="w-3 h-3" />;
   };
 
   const getPaymentBadge = (status) => {
@@ -147,10 +155,10 @@ const AdminHallBookings = () => {
       FAILED: { color: 'bg-red-100 text-red-800', icon: XCircle, label: 'Failed' },
       REFUNDED: { color: 'bg-gray-100 text-gray-800', icon: RefreshCw, label: 'Refunded' }
     };
-    
+
     const config = statusConfig[status] || { color: 'bg-gray-100 text-gray-800', icon: AlertCircle, label: status };
     const Icon = config.icon;
-    
+
     return (
       <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${config.color}`}>
         <Icon className="w-3 h-3" />
@@ -437,7 +445,13 @@ const AdminHallBookings = () => {
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {getPaymentBadge(booking.payment_status)}
+                      <div className="flex flex-col gap-2">
+                        {getPaymentBadge(booking.payment_status)}
+                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200">
+                          {getPaymentMethodIcon(booking.payment_method)}
+                          {booking.payment_method === 'ONLINE' ? 'Online' : 'Cash'}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {getStatusBadge(booking.booking_status)}
@@ -454,6 +468,14 @@ const AdminHallBookings = () => {
                           <option value="COMPLETED">Completed</option>
                           <option value="CANCELLED">Cancelled</option>
                         </select>
+                        {(booking.payment_status === 'PENDING') && (
+                          <button
+                            onClick={() => handleMarkRemainingPaid(booking.id)}
+                            className="w-full px-3 py-2 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-xl text-xs font-bold hover:shadow-lg hover:shadow-green-500/30 transition-all duration-200 hover:scale-105"
+                          >
+                            Mark Fully Paid
+                          </button>
+                        )}
                         {booking.payment_status === 'ADVANCE_PAID' && booking.remaining_amount > 0 && (
                           <button
                             onClick={() => handleMarkRemainingPaid(booking.id)}

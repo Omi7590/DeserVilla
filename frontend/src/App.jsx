@@ -21,6 +21,8 @@ import ContactUs from './pages/ContactUs';
 import TermsAndConditions from './pages/TermsAndConditions';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 
+import QRCodeGenerator from './pages/QRCodeGenerator';
+
 function App() {
   // Start backend keep-alive on mount
   useEffect(() => {
@@ -43,6 +45,7 @@ function App() {
         <Route path="/contact" element={<ContactUs />} />
         <Route path="/terms" element={<TermsAndConditions />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/qr-codes" element={<QRCodeGenerator />} />
         
         {/* Admin Routes */}
         <Route path="/admin/login" element={<AdminLogin />} />

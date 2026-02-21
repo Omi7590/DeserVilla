@@ -1,17 +1,20 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import os from 'os';
 import menuRoutes from './routes/menuRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import hallBookingRoutes from './routes/hallBookingRoutes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { checkTables } from './scripts/checkTables.js';
+import { runCronJob } from './scripts/cron.js';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
 
 // Middleware
 const allowedOrigins = [
@@ -20,11 +23,8 @@ const allowedOrigins = [
   'http://localhost:5176',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:5176',
-  'http://192.168.156.86:5173', // Allow access from network IP
-<<<<<<< HEAD
-  'http://192.168.203.86:5173', // Current network IP
-=======
->>>>>>> 2ede478d0f2164cfe6e8efb00d58acc28796f05d
+  'http://192.168.156.86:5173', // Network IP 1
+  'http://192.168.203.86:5173', // Network IP 2
   'https://deser-villa.vercel.app', // Vercel deployment
   'https://desertvilla.in', // Custom domain
   'https://www.desertvilla.in' // Custom domain with www
@@ -34,16 +34,16 @@ app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    
+
     // Check if origin is in allowed list
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
       // Allow any localhost, 127.0.0.1, local network IPs, and vercel.app domains
-      if (origin.includes('localhost') || 
-          origin.includes('127.0.0.1') || 
-          origin.includes('192.168.') ||
-          origin.includes('.vercel.app')) {
+      if (origin.includes('localhost') ||
+        origin.includes('127.0.0.1') ||
+        origin.includes('192.168.') ||
+        origin.includes('.vercel.app')) {
         callback(null, true);
       } else {
         console.log('CORS blocked origin:', origin);
@@ -70,13 +70,7 @@ app.get('/api/health', (req, res) => {
 // Error handling
 app.use(errorHandler);
 
-// Check database tables on startup (non-blocking)
-checkTables().catch(err => {
-  console.error('Error during table check:', err);
-});
-
 // Get local network IP
-import os from 'os';
 function getLocalIP() {
   const interfaces = os.networkInterfaces();
   for (const name of Object.keys(interfaces)) {
@@ -89,6 +83,14 @@ function getLocalIP() {
   }
   return 'localhost';
 }
+
+// Start Cron Job
+runCronJob();
+
+// Check database tables on startup (non-blocking)
+checkTables().catch(err => {
+  console.error('Error during table check:', err);
+});
 
 app.listen(PORT, '0.0.0.0', () => {
   const networkIP = getLocalIP();

@@ -5,6 +5,7 @@ import { CheckCircle, Home } from 'lucide-react';
 const PaymentSuccess = () => {
   const [searchParams] = useSearchParams();
   const orderId = searchParams.get('orderId');
+  const method = searchParams.get('method');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -23,10 +24,12 @@ const PaymentSuccess = () => {
           <CheckCircle className="w-20 h-20 text-green-500 mx-auto" />
         </div>
         <h1 className="text-3xl font-bold text-gray-800 mb-4">
-          Payment Successful!
+          {method === 'CASH' ? 'Order Placed!' : 'Payment Successful!'}
         </h1>
         <p className="text-gray-600 mb-2">
-          Your order has been placed successfully.
+          {method === 'CASH'
+            ? 'Your order has been placed. Please pay at the counter.'
+            : 'Your order has been placed successfully.'}
         </p>
         {orderId && (
           <p className="text-sm text-gray-500 mb-6">

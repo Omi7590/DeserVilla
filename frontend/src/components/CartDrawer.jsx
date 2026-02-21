@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { useCart } from '../context/CartContext';
-import { X, Plus, Minus, Trash2, ShoppingCart, UtensilsCrossed } from 'lucide-react';
+import { X, Plus, Minus, Trash2, ShoppingCart, UtensilsCrossed, CreditCard, Banknote } from 'lucide-react';
 
 const CartDrawer = ({ isOpen, onClose, onCheckout }) => {
   const { cart, updateQuantity, removeFromCart, getTotal, tableNumber, selectTable } = useCart();
+  const [paymentMethod, setPaymentMethod] = useState('ONLINE');
 
   if (!isOpen) return null;
 
@@ -66,7 +68,7 @@ const CartDrawer = ({ isOpen, onClose, onCheckout }) => {
                       </p>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
                     <div className="flex items-center gap-3 bg-white rounded-full px-3 py-2 shadow-sm border border-gray-200">
                       <button
@@ -107,32 +109,64 @@ const CartDrawer = ({ isOpen, onClose, onCheckout }) => {
         {/* Footer */}
         {cart.length > 0 && (
           <div className="border-t border-gray-200 bg-white p-6 space-y-4 shadow-lg">
-            {/* Table Number Selection */}
+            {/* Table Number Display - Read Only */}
+            {tableNumber ? (
+              <div className="bg-gradient-to-r from-primary-50 to-amber-50 rounded-xl p-4 border-2 border-primary-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <UtensilsCrossed className="w-5 h-5 text-primary-600" />
+                    <span className="text-sm font-semibold text-gray-700">Your Table</span>
+                  </div>
+                  <span className="text-2xl font-bold text-primary-600">
+                    Table {tableNumber}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-yellow-50 rounded-xl p-4 border-2 border-yellow-300">
+                <div className="flex items-start gap-3">
+                  <div className="bg-yellow-200 p-2 rounded-lg">
+                    <UtensilsCrossed className="w-5 h-5 text-yellow-700" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-yellow-800 mb-1">
+                      Scan QR Code Required
+                    </p>
+                    <p className="text-xs text-yellow-700">
+                      Please scan the QR code on your table to continue
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Payment Method Selection */}
             <div className="space-y-2">
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                <UtensilsCrossed className="w-4 h-4 inline mr-1" />
-                Select Table Number
+                Payment Method
               </label>
-              <div className="grid grid-cols-6 gap-2">
-                {[1, 2, 3, 4, 5, 6].map((table) => (
-                  <button
-                    key={table}
-                    onClick={() => selectTable(table)}
-                    className={`p-3 rounded-lg font-bold text-sm transition-all duration-200 ${
-                      tableNumber === table
-                        ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg scale-105'
-                        : 'bg-gray-100 text-gray-700 hover:bg-primary-100 hover:text-primary-700 border-2 border-gray-200 hover:border-primary-300'
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setPaymentMethod('ONLINE')}
+                  className={`p-3 rounded-lg border-2 flex items-center justify-center gap-2 transition-all ${paymentMethod === 'ONLINE'
+                      ? 'border-primary-500 bg-primary-50 text-primary-700 font-semibold'
+                      : 'border-gray-200 hover:border-primary-200 text-gray-600'
                     }`}
-                  >
-                    {table}
-                  </button>
-                ))}
+                >
+                  <CreditCard className="w-4 h-4" />
+                  Pay Online
+                </button>
+                <button
+                  onClick={() => setPaymentMethod('CASH')}
+                  className={`p-3 rounded-lg border-2 flex items-center justify-center gap-2 transition-all ${paymentMethod === 'CASH'
+                      ? 'border-primary-500 bg-primary-50 text-primary-700 font-semibold'
+                      : 'border-gray-200 hover:border-primary-200 text-gray-600'
+                    }`}
+                >
+                  <Banknote className="w-4 h-4" />
+                  Pay Cash
+                </button>
               </div>
-              {tableNumber && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Table {tableNumber} selected
-                </p>
-              )}
             </div>
 
             <div className="flex justify-between items-center p-4 bg-gradient-to-r from-primary-50 to-amber-50 rounded-xl border border-primary-100">
@@ -142,21 +176,17 @@ const CartDrawer = ({ isOpen, onClose, onCheckout }) => {
               </span>
             </div>
             <button
-              onClick={onCheckout}
+              onClick={() => onCheckout(paymentMethod)}
               disabled={!tableNumber}
-              className={`w-full py-4 text-lg font-display rounded-lg transition-all ${
-                tableNumber
+              className={`w-full py-4 text-lg font-display rounded-lg transition-all ${tableNumber
                   ? 'btn-primary'
                   : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              }`}
+                }`}
             >
-              {tableNumber ? 'Proceed to Payment' : 'Select Table to Continue'}
+              {tableNumber
+                ? (paymentMethod === 'ONLINE' ? 'Pay & Place Order' : 'Place Order (Pay at Counter)')
+                : 'Scan QR Code to Continue'}
             </button>
-            {!tableNumber && (
-              <p className="text-xs text-center text-red-500">
-                Please select your table number to proceed
-              </p>
-            )}
           </div>
         )}
       </div>

@@ -63,7 +63,7 @@ const AdminChangePassword = () => {
       });
 
       toast.success('Password changed successfully!');
-      
+
       // Reset form
       setFormData({
         currentPassword: '',
@@ -80,7 +80,7 @@ const AdminChangePassword = () => {
 
   const passwordStrength = (password) => {
     if (!password) return { strength: 0, label: '', color: '' };
-    
+
     let strength = 0;
     if (password.length >= 6) strength++;
     if (password.length >= 8) strength++;
@@ -161,22 +161,21 @@ const AdminChangePassword = () => {
                 {showPasswords.new ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
-            
+
             {/* Password Strength Indicator */}
             {formData.newPassword && (
               <div className="mt-2">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs text-gray-600">Password Strength:</span>
-                  <span className={`text-xs font-semibold ${
-                    strength.label === 'Weak' ? 'text-red-600' :
+                  <span className={`text-xs font-semibold ${strength.label === 'Weak' ? 'text-red-600' :
                     strength.label === 'Medium' ? 'text-yellow-600' :
-                    'text-green-600'
-                  }`}>
+                      'text-green-600'
+                    }`}>
                     {strength.label}
                   </span>
                 </div>
                 <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                  <div 
+                  <div
                     className={`h-full ${strength.color} transition-all duration-300`}
                     style={{ width: `${(strength.strength / 5) * 100}%` }}
                   ></div>
@@ -208,7 +207,7 @@ const AdminChangePassword = () => {
                 {showPasswords.confirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
-            
+
             {/* Password Match Indicator */}
             {formData.confirmPassword && (
               <div className="mt-2 flex items-center gap-2">

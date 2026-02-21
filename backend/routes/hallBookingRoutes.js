@@ -28,6 +28,7 @@ router.get('/admin/hall-bookings', authenticateAdmin, getAllBookings);
 router.get('/admin/hall-booking-slots/:bookingId', authenticateAdmin, getBookingSlots);
 router.patch('/admin/hall-booking-status/:bookingId', authenticateAdmin, updateBookingStatus);
 router.patch('/admin/hall-booking-remaining-payment/:bookingId', authenticateAdmin, markRemainingPaymentPaid);
+router.put('/admin/mark-paid/:bookingId', authenticateAdmin, markRemainingPaymentPaid); // Alias for clearer API usage
 
 export default router;
 

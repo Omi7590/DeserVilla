@@ -5,9 +5,9 @@ import { loadRazorpayScript, openRazorpayCheckout } from '../utils/razorpay';
 import MenuItem from '../components/MenuItem';
 import CartDrawer from '../components/CartDrawer';
 import Footer from '../components/Footer';
-import { ShoppingCart, Loader2, Calendar, UtensilsCrossed, X } from 'lucide-react';
+import { ShoppingCart, Loader2, Calendar, UtensilsCrossed, X, QrCode } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 
 const MenuPage = () => {
   const { cart, tableNumber, selectTable, clearCart, getTotal } = useCart();
@@ -15,19 +15,28 @@ const MenuPage = () => {
   const [loading, setLoading] = useState(true);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [showTableSelector, setShowTableSelector] = useState(false);
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   useEffect(() => {
     loadRazorpayScript();
     fetchMenu();
-  }, []);
+    
+    // Get table number from URL parameter
+    const tableParam = searchParams.get('table');
+    if (tableParam) {
+      const tableNum = parseInt(tableParam);
+      if (tableNum >= 1 && tableNum <= 10) {
+        selectTable(tableNum);
+      }
+    }
+  }, [searchParams]);
 
   const fetchMenu = async () => {
     try {
       const response = await menuAPI.getMenu();
       console.log('Menu API Response:', response);
-      
+
       if (response.data && response.data.menu) {
         setMenu(response.data.menu);
       } else if (response.data && response.data.success && response.data.menu) {
@@ -44,7 +53,7 @@ const MenuPage = () => {
         status: error.response?.status,
         config: error.config
       });
-      
+
       if (error.response?.status === 500) {
         const errorMsg = error.response?.data?.error || 'Database connection error';
         toast.error(`Database error: ${errorMsg}. Please check MySQL is running in XAMPP.`, {
@@ -64,21 +73,7 @@ const MenuPage = () => {
 
   // Removed auto-show table selector - will only show when user tries to checkout
 
-  const handleTableSelect = (table) => {
-    selectTable(table);
-    setShowTableSelector(false);
-    toast.success(`Table ${table} selected!`);
-    
-    // If cart has items, automatically proceed to checkout after table selection
-    if (cart.length > 0) {
-      // Small delay to let the toast show and modal close
-      setTimeout(() => {
-        handleCheckout();
-      }, 500);
-    }
-  };
-
-  const handleCheckout = async () => {
+  const handleCheckout = async (paymentMethod) => {
     if (cart.length === 0) {
       toast.error('Your cart is empty');
       return;
@@ -102,40 +97,48 @@ const MenuPage = () => {
           menuItemId: item.id,
           quantity: item.quantity
         })),
-        totalAmount: getTotal()
+        totalAmount: getTotal(),
+        paymentMethod: paymentMethod // Pass selected payment method
       };
 
       const orderResponse = await orderAPI.createOrder(orderData);
       const orderId = orderResponse.data.order.id;
 
-      // Create Razorpay payment order
-      const paymentResponse = await orderAPI.createPaymentOrder({
-        orderId,
-        amount: getTotal()
-      });
+      if (paymentMethod === 'ONLINE') {
+        // Create Razorpay payment order
+        const paymentResponse = await orderAPI.createPaymentOrder({
+          orderId,
+          amount: getTotal()
+        });
 
-      const { razorpayOrderId, amount, currency, key } = paymentResponse.data;
+        const { razorpayOrderId, amount, currency, key } = paymentResponse.data;
 
-      // Open Razorpay checkout
-      const paymentResult = await openRazorpayCheckout({
-        key,
-        amount,
-        currency,
-        razorpayOrderId,
-        orderId
-      });
+        // Open Razorpay checkout
+        const paymentResult = await openRazorpayCheckout({
+          key,
+          amount,
+          currency,
+          razorpayOrderId,
+          orderId
+        });
 
-      // Verify payment
-      const verifyResponse = await orderAPI.verifyPayment({
-        razorpayOrderId: paymentResult.razorpay_order_id,
-        razorpayPaymentId: paymentResult.razorpay_payment_id,
-        razorpaySignature: paymentResult.razorpay_signature,
-        orderId
-      });
+        // Verify payment
+        const verifyResponse = await orderAPI.verifyPayment({
+          razorpayOrderId: paymentResult.razorpay_order_id,
+          razorpayPaymentId: paymentResult.razorpay_payment_id,
+          razorpaySignature: paymentResult.razorpay_signature,
+          orderId
+        });
 
-      if (verifyResponse.data.success) {
+        if (verifyResponse.data.success) {
+          clearCart();
+          navigate(`/payment-success?orderId=${orderId}&method=ONLINE`);
+        }
+      } else {
+        // CASH Payment flow
         clearCart();
-        navigate(`/payment-success?orderId=${orderId}`);
+        toast.success('Order Placed! Please pay at the counter.');
+        navigate(`/payment-success?orderId=${orderId}&method=CASH`);
       }
     } catch (error) {
       console.error('Payment error:', error);
@@ -169,7 +172,7 @@ const MenuPage = () => {
               <h1 className="text-white text-xl font-bold">Desert Villa</h1>
               <p className="text-white/80 text-xs">Order delicious food</p>
             </div>
-            
+
             {/* Right Actions */}
             <div className="flex items-center gap-2">
               <Link
@@ -192,28 +195,18 @@ const MenuPage = () => {
               </button>
             </div>
           </div>
-          
-          {/* Table Selector */}
-          {tableNumber ? (
+
+          {/* Table Display - Read Only */}
+          {tableNumber && (
             <div className="mt-3 flex items-center justify-between bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2">
               <div className="flex items-center gap-2 text-white">
                 <UtensilsCrossed className="w-4 h-4" />
                 <span className="text-sm font-medium">Table {tableNumber}</span>
               </div>
-              <button
-                onClick={() => setShowTableSelector(true)}
-                className="text-xs text-white/80 hover:text-white underline"
-              >
-                Change
-              </button>
+              <div className="bg-white/20 p-1 rounded">
+                <QrCode className="w-4 h-4" />
+              </div>
             </div>
-          ) : (
-            <button
-              onClick={() => setShowTableSelector(true)}
-              className="mt-3 w-full bg-white/10 backdrop-blur-sm text-white rounded-lg px-3 py-2 text-sm font-medium hover:bg-white/20 transition-all"
-            >
-              Select Table Number
-            </button>
           )}
         </div>
       </header>
@@ -238,8 +231,8 @@ const MenuPage = () => {
         </div>
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center">
           <div className="relative">
-            <h2 className="text-5xl md:text-6xl font-bold mb-4 relative z-10" style={{fontFamily: 'Poppins, sans-serif'}}>
-              <span className="inline-block hero-word" style={{animationDelay: '0s'}}>
+            <h2 className="text-5xl md:text-6xl font-bold mb-4 relative z-10" style={{ fontFamily: 'Poppins, sans-serif' }}>
+              <span className="inline-block hero-word" style={{ animationDelay: '0s' }}>
                 {'Welcome'.split('').map((char, i) => (
                   <span
                     key={i}
@@ -255,7 +248,7 @@ const MenuPage = () => {
                 ))}
               </span>
               <span className="inline-block mx-2"></span>
-              <span className="inline-block hero-word" style={{animationDelay: '0.3s'}}>
+              <span className="inline-block hero-word" style={{ animationDelay: '0.3s' }}>
                 {'to'.split('').map((char, i) => (
                   <span
                     key={i}
@@ -270,67 +263,67 @@ const MenuPage = () => {
                   </span>
                 ))}
               </span>
-               <span className="inline-block mx-3"></span>
-               <span className="inline-block hero-word relative group cursor-pointer px-2 py-1" style={{animationDelay: '0.6s'}}>
-                 {/* White background with orange border */}
-                 <span className="absolute -inset-0.5 bg-white rounded-md z-0 border-2 border-orange-500 shadow-sm group-hover:shadow-md transition-all duration-300"></span>
-                 {/* Glow effects */}
-                 <span className="absolute -inset-2 bg-gradient-to-r from-primary-400/20 via-primary-500/30 to-primary-600/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 -z-10 rounded-lg"></span>
-                 {'Desert'.split('').map((char, i) => (
-                   <span
-                     key={i}
-                     className="inline-block hero-letter relative z-10"
-                     style={{
-                       animationDelay: `${(i + 10) * 0.05}s`,
-                       transform: 'translateY(100px) rotateX(90deg) scale(0.5)',
-                       opacity: 0,
-                       color: 'rgba(234, 88, 12, 1)',
-                       textShadow: '0 1px 2px rgba(0,0,0,0.1)',
-                       fontWeight: '700'
-                     }}
-                   >
-                     {char === ' ' ? '\u00A0' : char}
-                   </span>
-                 ))}
-               </span>
-               <span className="inline-block mx-2"></span>
-               <span className="inline-block hero-word relative group cursor-pointer px-2 py-1" style={{animationDelay: '0.9s'}}>
-                 {/* White background with orange border */}
-                 <span className="absolute -inset-0.5 bg-white rounded-md z-0 border-2 border-orange-500 shadow-sm group-hover:shadow-md transition-all duration-300"></span>
-                 {/* Glow effects */}
-                 <span className="absolute -inset-2 bg-gradient-to-r from-primary-400/20 via-primary-500/30 to-primary-600/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 -z-10 rounded-lg"></span>
-                 {'Villa'.split('').map((char, i) => (
-                   <span
-                     key={i}
-                     className="inline-block hero-letter relative z-10"
-                     style={{
-                       animationDelay: `${(i + 16) * 0.05}s`,
-                       transform: 'translateY(100px) rotateX(90deg) scale(0.5)',
-                       opacity: 0,
-                       color: 'rgba(234, 88, 12, 1)',
-                       textShadow: '0 1px 2px rgba(0,0,0,0.1)',
-                       fontWeight: '700'
-                     }}
-                   >
-                     {char === ' ' ? '\u00A0' : char}
-                   </span>
-                 ))}
-               </span>
+              <span className="inline-block mx-3"></span>
+              <span className="inline-block hero-word relative group cursor-pointer px-2 py-1" style={{ animationDelay: '0.6s' }}>
+                {/* White background with orange border */}
+                <span className="absolute -inset-0.5 bg-white rounded-md z-0 border-2 border-orange-500 shadow-sm group-hover:shadow-md transition-all duration-300"></span>
+                {/* Glow effects */}
+                <span className="absolute -inset-2 bg-gradient-to-r from-primary-400/20 via-primary-500/30 to-primary-600/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 -z-10 rounded-lg"></span>
+                {'Desert'.split('').map((char, i) => (
+                  <span
+                    key={i}
+                    className="inline-block hero-letter relative z-10"
+                    style={{
+                      animationDelay: `${(i + 10) * 0.05}s`,
+                      transform: 'translateY(100px) rotateX(90deg) scale(0.5)',
+                      opacity: 0,
+                      color: 'rgba(234, 88, 12, 1)',
+                      textShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                      fontWeight: '700'
+                    }}
+                  >
+                    {char === ' ' ? '\u00A0' : char}
+                  </span>
+                ))}
+              </span>
+              <span className="inline-block mx-2"></span>
+              <span className="inline-block hero-word relative group cursor-pointer px-2 py-1" style={{ animationDelay: '0.9s' }}>
+                {/* White background with orange border */}
+                <span className="absolute -inset-0.5 bg-white rounded-md z-0 border-2 border-orange-500 shadow-sm group-hover:shadow-md transition-all duration-300"></span>
+                {/* Glow effects */}
+                <span className="absolute -inset-2 bg-gradient-to-r from-primary-400/20 via-primary-500/30 to-primary-600/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 -z-10 rounded-lg"></span>
+                {'Villa'.split('').map((char, i) => (
+                  <span
+                    key={i}
+                    className="inline-block hero-letter relative z-10"
+                    style={{
+                      animationDelay: `${(i + 16) * 0.05}s`,
+                      transform: 'translateY(100px) rotateX(90deg) scale(0.5)',
+                      opacity: 0,
+                      color: 'rgba(234, 88, 12, 1)',
+                      textShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                      fontWeight: '700'
+                    }}
+                  >
+                    {char === ' ' ? '\u00A0' : char}
+                  </span>
+                ))}
+              </span>
             </h2>
             {/* Decorative underline */}
             <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-0 h-1 bg-gradient-to-r from-transparent via-primary-500 to-transparent hero-underline"></div>
           </div>
-          <div className="animate-fade-in" style={{animationDelay: '1.5s'}}>
+          <div className="animate-fade-in" style={{ animationDelay: '1.5s' }}>
             <p className="text-xl text-gray-600 max-w-2xl mx-auto relative">
-              <span className="inline-block hero-subtitle" style={{animationDelay: '1.6s'}}>
+              <span className="inline-block hero-subtitle" style={{ animationDelay: '1.6s' }}>
                 Handcrafted delicacies and beverages made with love
               </span>
             </p>
           </div>
           <div className="mt-8 flex justify-center gap-2 animate-float">
             <div className="w-2 h-2 bg-primary-500 rounded-full"></div>
-            <div className="w-2 h-2 bg-amber-500 rounded-full" style={{animationDelay: '0.2s'}}></div>
-            <div className="w-2 h-2 bg-orange-500 rounded-full" style={{animationDelay: '0.4s'}}></div>
+            <div className="w-2 h-2 bg-amber-500 rounded-full" style={{ animationDelay: '0.2s' }}></div>
+            <div className="w-2 h-2 bg-orange-500 rounded-full" style={{ animationDelay: '0.4s' }}></div>
           </div>
         </div>
       </div>
@@ -351,12 +344,12 @@ const MenuPage = () => {
                 <h2 className="section-title capitalize">{category}</h2>
                 <div className="h-1 flex-1 bg-gradient-to-l from-primary-500 to-transparent rounded-full animate-slide-up"></div>
               </div>
-      <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 {items.map((item, itemIndex) => (
-                  <div 
-                    key={item.id} 
-                    style={{ 
-                      animation: `scaleIn 0.4s ease-out ${(index * 0.15) + (itemIndex * 0.08)}s both` 
+                  <div
+                    key={item.id}
+                    style={{
+                      animation: `scaleIn 0.4s ease-out ${(index * 0.15) + (itemIndex * 0.08)}s both`
                     }}
                   >
                     <MenuItem item={item} />
@@ -375,51 +368,15 @@ const MenuPage = () => {
         onCheckout={handleCheckout}
       />
 
-      {/* Table Selector Modal */}
-      {showTableSelector && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center animate-fade-in p-4">
-          <div className="card-gradient max-w-md w-full animate-scale-in border-2 border-primary-200">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-2xl font-display font-bold gradient-text">Select Your Table</h2>
-                <p className="text-gray-600 text-sm mt-1">
-                  {cart.length > 0 
-                    ? 'Choose your table number to proceed with payment'
-                    : 'Choose your table number to continue'}
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  setShowTableSelector(false);
-                  if (cart.length > 0) {
-                    setIsCartOpen(true); // Reopen cart if they cancel
-                  }
-                }}
-                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-              >
-                <X className="w-5 h-5 text-gray-600" />
-              </button>
-            </div>
-            
-            <div className="grid grid-cols-3 gap-3 mb-6">
-              {[1, 2, 3, 4, 5, 6].map((table) => (
-                <button
-                  key={table}
-                  onClick={() => handleTableSelect(table)}
-                  className={`p-6 rounded-xl font-display font-bold text-lg transition-all duration-300 transform hover:scale-110 hover:-translate-y-1 ${
-                    tableNumber === table
-                      ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg scale-105'
-                      : 'bg-white text-gray-700 hover:bg-primary-50 border-2 border-gray-200 hover:border-primary-300 shadow-md'
-                  }`}
-                >
-                  {table}
-                </button>
-              ))}
-            </div>
-            
-            <div className="text-center">
-              <p className="text-sm text-gray-500">
-                Or scan the QR code on your table
+      {/* No Table Selected Warning */}
+      {!tableNumber && (
+        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-40 max-w-md w-full mx-4">
+          <div className="bg-yellow-500 text-white rounded-xl p-4 shadow-lg flex items-start gap-3 animate-bounce-slow">
+            <QrCode className="w-6 h-6 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-sm">Scan QR Code Required</p>
+              <p className="text-xs opacity-90 mt-1">
+                Please scan the QR code on your table to start ordering
               </p>
             </div>
           </div>
