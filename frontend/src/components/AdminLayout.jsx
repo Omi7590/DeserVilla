@@ -128,7 +128,8 @@ const AdminLayout = () => {
     { path: '/admin/orders', icon: ShoppingBag, label: 'Orders' },
     { path: '/admin/products', icon: Package, label: 'Products' },
     { path: '/admin/payments', icon: CreditCard, label: 'Payments' },
-    { path: '/admin/hall-bookings', icon: Calendar, label: 'Hall Bookings' }
+    { path: '/admin/hall-bookings', icon: Calendar, label: 'Hall Bookings' },
+    { path: '/admin/hall-settings', icon: Settings, label: 'Hall Settings' }
   ];
 
   const isActive = (path) => location.pathname === path;

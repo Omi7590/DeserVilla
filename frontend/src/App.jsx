@@ -13,6 +13,7 @@ import AdminOrders from './pages/admin/AdminOrders';
 import AdminProducts from './pages/admin/AdminProducts';
 import AdminPayments from './pages/admin/AdminPayments';
 import AdminHallBookings from './pages/admin/AdminHallBookings';
+import AdminHallSettings from './pages/admin/AdminHallSettings';
 import AdminChangePassword from './pages/admin/AdminChangePassword';
 import HallBookingPage from './pages/HallBookingPage';
 import HallBookingCheckout from './pages/HallBookingCheckout';
@@ -63,6 +64,7 @@ function App() {
           <Route path="products" element={<AdminProducts />} />
           <Route path="payments" element={<AdminPayments />} />
           <Route path="hall-bookings" element={<AdminHallBookings />} />
+          <Route path="hall-settings" element={<AdminHallSettings />} />
           <Route path="change-password" element={<AdminChangePassword />} />
         </Route>
       </Routes>

@@ -25,6 +25,10 @@ import {
   markAllAsRead,
   getUnreadNotificationCount
 } from '../controllers/notificationController.js';
+import {
+  getHallSettings,
+  updateHallSetting
+} from '../controllers/hallSettingsController.js';
 import { authenticateAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -60,5 +64,9 @@ router.get('/notifications', authenticateAdmin, getNotificationsList);
 router.get('/notifications/unread-count', authenticateAdmin, getUnreadNotificationCount);
 router.patch('/notifications/:id/read', authenticateAdmin, markAsRead);
 router.patch('/notifications/read-all', authenticateAdmin, markAllAsRead);
+
+// Hall Settings Management
+router.get('/hall-settings', authenticateAdmin, getHallSettings);
+router.put('/hall-settings', authenticateAdmin, updateHallSetting);
 
 export default router;

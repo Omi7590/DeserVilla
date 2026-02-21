@@ -1,16 +1,30 @@
 import pool from '../config/database.js';
 import { razorpay } from '../config/razorpay.js';
 import crypto from 'crypto';
+import { getSettingValue } from './hallSettingsController.js';
 
-// Constants for hourly booking
-const HOUR_PRICE = 500; // ₹500 per hour
-const START_HOUR = 10; // 10:00 AM
-const END_HOUR = 20; // 8:00 PM (20:00)
+// Default constants (fallback if settings not found)
+const DEFAULT_HOUR_PRICE = 500;
+const DEFAULT_START_HOUR = 10;
+const DEFAULT_END_HOUR = 20;
+
+// Helper to get current settings
+const getHallSettings = async () => {
+  const hourlyRate = await getSettingValue('hourly_rate');
+  const startHour = await getSettingValue('start_hour');
+  const endHour = await getSettingValue('end_hour');
+
+  return {
+    HOUR_PRICE: hourlyRate ? parseFloat(hourlyRate) : DEFAULT_HOUR_PRICE,
+    START_HOUR: startHour ? parseInt(startHour) : DEFAULT_START_HOUR,
+    END_HOUR: endHour ? parseInt(endHour) : DEFAULT_END_HOUR
+  };
+}
 
 // Helper: Generate hourly slots for a day
-const generateHourlySlots = () => {
+const generateHourlySlots = (startHour, endHour) => {
   const slots = [];
-  for (let hour = START_HOUR; hour < END_HOUR; hour++) {
+  for (let hour = startHour; hour < endHour; hour++) {
     const startTime = `${hour.toString().padStart(2, '0')}:00:00`;
     const endTime = `${(hour + 1).toString().padStart(2, '0')}:00:00`;
     slots.push({
@@ -31,6 +45,9 @@ export const checkHourlyAvailability = async (req, res, next) => {
     if (!bookingDate) {
       return res.status(400).json({ error: 'Booking date is required' });
     }
+
+    // Get current settings
+    const { HOUR_PRICE, START_HOUR, END_HOUR } = await getHallSettings();
 
     // Validate date is not in the past
     const today = new Date();
@@ -60,7 +77,7 @@ export const checkHourlyAvailability = async (req, res, next) => {
     const bookedTimes = bookedSlotsResult.rows.map(row => row.start_time);
 
     // Generate all available slots
-    const allSlots = generateHourlySlots();
+    const allSlots = generateHourlySlots(START_HOUR, END_HOUR);
 
     // If it's today, filter out past hours
     const now = new Date();
@@ -164,6 +181,9 @@ export const createHourlyBooking = async (req, res, next) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'Missing required fields' });
     }
+
+    // Get current settings
+    const { HOUR_PRICE, START_HOUR, END_HOUR } = await getHallSettings();
 
     const payMethod = paymentMethod === 'CASH' ? 'CASH' : 'ONLINE';
 
